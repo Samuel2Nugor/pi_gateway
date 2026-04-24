@@ -1,6 +1,7 @@
 import paho.mqtt.client as mqtt
-from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_TOPIC_TO_TAG
+import json
 
+from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_TOPIC_TO_TAG
 from ble_client import run_ble_write
 
 
