@@ -1,6 +1,8 @@
 import paho.mqtt.client as mqtt
 from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_TOPIC_TO_TAG
 
+from ble_client import run_ble_write
+
 
 def on_connect(client, userdata, flags, reason_code, properties=None):
     print("Connected to MQTT broker")
@@ -10,6 +12,8 @@ def on_connect(client, userdata, flags, reason_code, properties=None):
 def on_message(client, userdata, message):
     payload = message.payload.decode("utf-8")
     print(f"Recieved on topic {message.topic}: {payload}")
+
+    run_ble_write(payload)
 
 
 def start_mqtt_client():
