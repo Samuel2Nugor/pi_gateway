@@ -7,6 +7,7 @@ MQTT_TOPIC_TO_TAG = "esl/tag/write"
 
 # BLE settings
 BLE_TAG_NAME = "TG_01"
+BLE_TAG_ADDRESS = "74:4D:BD:63:C2:C6"
 
 
 # Replace these with your real ESP#"_H" UUIDs

@@ -1,7 +1,7 @@
-# ble_client
 import asyncio
-from bleak import BleakScanner
+from bleak import BleakClient, BleakScanner
 
+from config import BLE_TAG_ADDRESS
 
 
 async def scan_ble_devices():
@@ -14,3 +14,17 @@ async def scan_ble_devices():
 
 def run_ble_scan():
     asyncio.run(scan_ble_devices())
+
+async def connect_to_tag():
+    print(f"Connecting to BLE tag: {BLE_TAG_ADDRESS}")
+
+    async with BleakScanner(BLE_TAG_ADDRESS) as client:
+        if client.is_connected:
+            print("Connected to Tag")
+        else:
+            print("Failed to connect to Tag")
+
+        print("Disconnected from Tag")
+
+def run_ble_connect():
+    asyncio.run(connect_to_tag())
