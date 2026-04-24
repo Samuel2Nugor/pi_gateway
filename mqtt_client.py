@@ -1,9 +1,10 @@
-import paho.mqtt.client as mqtt
+import paho.mqtt.client as mqt
+from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_TOPIC_TO_TAG
 
 
 def on_connect(client, userdata, flags, reason_code, properties=None):
     print("Connected to MQTT broker")
-    client.subscribe("esl/tag/write")
+    client.subscribe(MQTT_TOPIC_TO_TAG)
 
 
 def on_message(client, userdata, message):
@@ -17,5 +18,5 @@ def start_mqtt_client():
     client.on_connect = on_connect
     client.on_message = on_message
 
-    client.connect("localhost", 1883, 60)       # host, port
+    client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, 60)       # host, port
     client.loop_forever()
