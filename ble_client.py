@@ -18,7 +18,7 @@ def run_ble_scan():
 async def connect_to_tag():
     print(f"Connecting to BLE tag: {BLE_TAG_ADDRESS}")
 
-    async with BleakScanner(BLE_TAG_ADDRESS) as client:
+    async with BleakClient(BLE_TAG_ADDRESS) as client:
         if client.is_connected:
             print("Connected to Tag")
         else:
