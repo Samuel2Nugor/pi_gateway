@@ -14,6 +14,18 @@ def on_message(client, userdata, message):
     payload = message.payload.decode("utf-8")
     print(f"Recieved on topic {message.topic}: {payload}")
 
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        print("Invalid JSON. Message ignored.")
+
+    requires_fields = ["tagId", "title", "finalPrice"]
+
+    for field in requires_fields:
+        if field not in data:
+            print(f"Missing field: {field}. Message ignored")
+            return
+
     run_ble_write(payload)
 
 
