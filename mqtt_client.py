@@ -18,4 +18,4 @@ def start_mqtt_client():
     client.on_message = on_message
 
     client.connect("localhost", 1883, 60)       # host, port
-    client.loop_foreever()
+    client.loop_forever()
