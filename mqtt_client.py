@@ -18,6 +18,7 @@ def on_message(client, userdata, message):
         data = json.loads(payload)
     except json.JSONDecodeError:
         print("Invalid JSON. Message ignored.")
+        return
 
     requires_fields = ["tagId", "title", "finalPrice"]
 
