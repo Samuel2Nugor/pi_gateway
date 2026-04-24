@@ -29,7 +29,7 @@ async def connect_to_tag():
 def run_ble_connect():
     asyncio.run(connect_to_tag())
 
-async def write_test_payload_to_tag():
+async def write_test_payload_to_tag(payload: str):
     print(f"Connecting to Tag: {BLE_TAG_ADDRESS}")
 
     async with BleakClient(BLE_TAG_ADDRESS) as client:
@@ -51,7 +51,7 @@ async def write_test_payload_to_tag():
     print("Disconnected from Tag")
 
 def run_ble_write(payload: str):
-    asyncio.run(write_test_payload_to_tag(payload))
+    asyncio.run(write_payload_to_tag(payload))
 
 # test wrapper
 def run_ble_write_test():
