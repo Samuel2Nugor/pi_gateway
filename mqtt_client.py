@@ -1,4 +1,4 @@
-import paho.mqtt.client as mqt
+import paho.mqtt.client as mqtt
 from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_TOPIC_TO_TAG
 
 
