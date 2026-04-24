@@ -1,7 +1,7 @@
 import asyncio
 from bleak import BleakClient, BleakScanner
 
-from config import BLE_TAG_ADDRESS
+from config import BLE_TAG_ADDRESS, WRITE_CHAR_UUID
 
 
 async def scan_ble_devices():
@@ -28,3 +28,29 @@ async def connect_to_tag():
 
 def run_ble_connect():
     asyncio.run(connect_to_tag())
+
+async def write_test_payload_to_tag():
+    payload = '{"tagId":"TG_01","title":"Milk 1L","finalPrice":"29.00 SEK"}'
+
+    print(f"Connecting to Tag: {BLE_TAG_ADDRESS}")
+
+    async with BleakClient(BLE_TAG_ADDRESS) as client:
+        if not client.is_connected:
+            print("Failed to connect to Tag")
+            return
+
+        print("Connected to Tag")
+        print(f"Writing payload: {payload}")
+
+        await client.write_gatt_char(
+            WRITE_CHAR_UUID,
+            payload.encode("utf-8"),
+            response=True
+        )
+
+        print("Payload wriiten to Tag")
+    
+    print("Disconnected from Tag")
+
+def run_ble_write_test():
+    asyncio.run(write_test_payload_to_tag())
