@@ -1,7 +1,7 @@
 import asyncio
 from bleak import BleakClient, BleakScanner
 
-from config import BLE_TAG_ADDRESS, WRITE_CHAR_UUID
+from config import BLE_TAG_ADDRESS, WRITE_CHAR_UUID, ACK_CHAR_UUID
 
 
 async def scan_ble_devices():
@@ -47,6 +47,11 @@ async def write_payload_to_tag(payload: str):
         )
 
         print("Payload wriiten to Tag")
+
+        ack_data = await client.read_gatt_char(ACK_CHAR_UUID)
+        ack_text = ack_data.decode("utf-8")
+
+        print(f"ACK from Tag: {ack_text}")
     
     print("Disconnected from Tag")
 
