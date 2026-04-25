@@ -102,8 +102,8 @@ async def write_payload_to_tag_with_notify(payload: str):  # BLE Write + ACK Not
             print("Waiting for ACK notification...")
 
             try:
-                await asyncio.wait_for(ack_recieved.wait(), timeout=5.0)
-                print(f"ACK recieved: {ack_value['text']}")
+                await asyncio.wait_for(ack_received.wait(), timeout=5.0)
+                print(f"ACK received: {ack_value['text']}")
             except asyncio.TimeoutError:
                 print("ACK notification timeout")
                 print("Readind ACK instead...")
