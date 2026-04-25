@@ -29,7 +29,7 @@ async def connect_to_tag():
 def run_ble_connect():
     asyncio.run(connect_to_tag())
 
-async def write_payload_to_tag(payload: str):
+async def write_payload_to_tag(payload: str):   # BLE Write + ACK Read
     print(f"Connecting to Tag: {BLE_TAG_ADDRESS}")
 
     async with BleakClient(BLE_TAG_ADDRESS) as client:
@@ -55,17 +55,17 @@ async def write_payload_to_tag(payload: str):
     
     print("Disconnected from Tag")
 
-async def write_payload_to_tag_with_notify(payload: str):
-    ack_recieved = asyncio.Event()
+async def write_payload_to_tag_with_notify(payload: str):  # BLE Write + ACK Notify
+    ack_received = asyncio.Event()
     ack_value = {"text" : None}
 
     def ack_callback(sender, data):
         ack_text = data.decode("utf-8")
         ack_value["text"] = ack_text
         print(f"ACK notification from Tag: {ack_text}")
-        ack_recieved.set()
+        ack_received.set()
 
-    print("Connected to Tag: {BLE_TAG_ADDRESS}")
+    print(f"Connecting to Tag: {BLE_TAG_ADDRESS}")
 
     async with BleakClient(BLE_TAG_ADDRESS) as client:
         if not client.is_connected:
@@ -74,8 +74,13 @@ async def write_payload_to_tag_with_notify(payload: str):
         
         print("Connected to Tag")
 
-    await client.start_notify(ACK_CHAR_UUID, ack_callback)
-    print("ACK notification enabled")
+    
+    try:
+        await client.start_notify(ACK_CHAR_UUID, ack_callback)
+        print("ACK notification enabled")
+    except Exception as error:
+        print(f"Failed to enable ACK notification: {error}")
+        return
 
     print(f"writing payload: {payload}")
 
