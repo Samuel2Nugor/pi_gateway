@@ -78,7 +78,6 @@ async def write_payload_to_tag_with_notify(payload: str):  # BLE Write + ACK Not
         await asyncio.sleep(0.5)
 
         notify_enable = False
-
     
         try:
             await client.start_notify(ACK_CHAR_UUID, ack_callback)
@@ -120,9 +119,10 @@ async def write_payload_to_tag_with_notify(payload: str):  # BLE Write + ACK Not
             print(f"ACK from Tag: {ack_text}")
 
     print("Disconnected from Tag")
+    return ack_value["text"]
 
 def run_ble_write(payload: str):
-    asyncio.run(write_payload_to_tag_with_notify(payload))
+     return asyncio.run(write_payload_to_tag_with_notify(payload))
 
 # test wrapper
 def run_ble_write_test():

@@ -4,6 +4,7 @@
 MQTT_BROKER_HOST = "localhost"
 MQTT_BROKER_PORT = 1883
 MQTT_TOPIC_TO_TAG = "esl/tag/write"
+MQTT_TOPIC_ACK = "esl/tag/ack"
 
 # BLE settings
 BLE_TAG_NAME = "TG_01"
