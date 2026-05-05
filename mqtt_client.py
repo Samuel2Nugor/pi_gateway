@@ -23,7 +23,7 @@ def send_to_ble_with_retries(payload: str, max_attempts: int = 3):
 
         result = run_ble_write(payload)
 
-        if result["ack"] == true:
+        if result["ack"] == "true":
             return result
 
         reason = result.get("reason")
