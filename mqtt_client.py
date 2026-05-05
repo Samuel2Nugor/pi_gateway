@@ -1,6 +1,7 @@
 import paho.mqtt.client as mqtt
 import json
 import time
+import concurrent.futures
 
 from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_TOPIC_TO_TAG, MQTT_TOPIC_ACK
 from ble_client import run_ble_write
@@ -21,7 +22,17 @@ def send_to_ble_with_retries(payload: str, max_attempts: int = 3):
     for attempt in range(1, max_attempts + 1):
         print(f"BLE write attempt {attempt}/{max_attempts}")
 
-        result = run_ble_write(payload)
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(run_ble_write, payload)
+                result = future.result(timeout=10)
+
+        except concurrent.futures.TimeoutError:
+            print("BLE write attempt timed out")
+            result = {
+                "ack": "false",
+                "reason": "timeout"
+            }
 
         if result["ack"] == "true":
             return result
