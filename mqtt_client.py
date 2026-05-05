@@ -27,15 +27,18 @@ def on_message(client, userdata, message):
             print(f"Missing field: {field}. Message ignored")
             return
 
-    ack = run_ble_write(payload)
+    ble_result = run_ble_write(payload)
 
     ack_payload = {
         "tagId": data["tagId"],
-        "ack": ack
+        "ack": ble_result["ack"]
     }
 
+    if ble_result["reason"] is not None:
+        ack_payload["reason"] = ble_result["reason"]
+
     client.publish(MQTT_TOPIC_ACK, json.dumps(ack_payload))
-    print(f"Publish ACK to {MQTT_TOPIC_ACK}: {ack_payload}")
+    print(f"Published ACK to {MQTT_TOPIC_ACK}: {ack_payload}")
 
 
 def start_mqtt_client():

@@ -1,5 +1,5 @@
 import asyncio
-from bleak import BleakClient, BleakScanner
+from bleak import BleakClient, BleakScanner, BleakError
 
 from config import BLE_TAG_ADDRESS, WRITE_CHAR_UUID, ACK_CHAR_UUID
 
@@ -55,9 +55,9 @@ async def write_payload_to_tag(payload: str):   # BLE Write + ACK Read
     
     print("Disconnected from Tag")
 
-async def write_payload_to_tag_with_notify(payload: str):  # BLE Write + ACK Notify
+async def write_payload_to_tag_with_notify(payload: str):
     ack_received = asyncio.Event()
-    ack_value = {"text" : None}
+    ack_value = {"text": None}
 
     def ack_callback(sender, data):
         ack_text = data.decode("utf-8")
@@ -67,62 +67,90 @@ async def write_payload_to_tag_with_notify(payload: str):  # BLE Write + ACK Not
 
     print(f"Connecting to Tag: {BLE_TAG_ADDRESS}")
 
-    async with BleakClient(BLE_TAG_ADDRESS) as client:
-        if not client.is_connected:
-            print("Failed to connect to Tag")
-            return
-        
-        print("Connected to Tag")
+    try:
+        async with BleakClient(BLE_TAG_ADDRESS) as client:
+            if not client.is_connected:
+                print("Failed to connect to Tag")
+                return {
+                    "ack": "false",
+                    "reason": "not_connected"
+                }
 
-        # Give BLE connection a short moment before enabling notify
-        await asyncio.sleep(0.5)
+            print("Connected to Tag")
 
-        notify_enable = False
-    
-        try:
-            await client.start_notify(ACK_CHAR_UUID, ack_callback)
-            notify_enable = True
-            print("ACK notification enabled")
-        except Exception as error:
-            print(f"Failed to enable ACK notification: {error}")
-            print("Falling back to ACK read after write")
+            await asyncio.sleep(0.5)
 
-        print(f"writing payload: {payload}")
-
-        await client.write_gatt_char(
-            WRITE_CHAR_UUID,
-            payload.encode("utf-8"),
-            response=True
-        )
-
-        print("Payload written to Tag")
-        
-        if notify_enable:
-            print("Waiting for ACK notification...")
+            notify_enabled = False
 
             try:
-                await asyncio.wait_for(ack_received.wait(), timeout=5.0)
-                print(f"ACK received: {ack_value['text']}")
-            except asyncio.TimeoutError:
-                print("ACK notification timeout")
-                print("Readind ACK instead...")
+                await client.start_notify(ACK_CHAR_UUID, ack_callback)
+                notify_enabled = True
+                print("ACK notification enabled")
+            except Exception as error:
+                print(f"Failed to enable ACK notification: {error}")
+                print("Falling back to ACK read after write")
 
+            print(f"Writing payload: {payload}")
+
+            await client.write_gatt_char(
+                WRITE_CHAR_UUID,
+                payload.encode("utf-8"),
+                response=True
+            )
+
+            print("Payload written to Tag")
+
+            if notify_enabled:
+                print("Waiting for ACK notification...")
+
+                try:
+                    await asyncio.wait_for(ack_received.wait(), timeout=5.0)
+                    print(f"ACK received: {ack_value['text']}")
+                except asyncio.TimeoutError:
+                    print("ACK notification timeout")
+                    print("Reading ACK instead...")
+
+                    ack_data = await client.read_gatt_char(ACK_CHAR_UUID)
+                    ack_value["text"] = ack_data.decode("utf-8")
+                    print(f"ACK from Tag: {ack_value['text']}")
+
+                await client.stop_notify(ACK_CHAR_UUID)
+                print("ACK notification disabled")
+            else:
                 ack_data = await client.read_gatt_char(ACK_CHAR_UUID)
-                ack_text = ack_data.decode("utf-8")
-                print(f"ACK from Tag. {ack_text}")
+                ack_value["text"] = ack_data.decode("utf-8")
+                print(f"ACK from Tag: {ack_value['text']}")
 
-            await client.stop_notify(ACK_CHAR_UUID)
-            print("ACK notification disabled")
-        else:
-            ack_data = await client.read_gatt_char(ACK_CHAR_UUID)
-            ack_text = ack_data.decode("utf-8")
-            print(f"ACK from Tag: {ack_text}")
+        print("Disconnected from Tag")
 
-    print("Disconnected from Tag")
-    return ack_value["text"]
+        return {
+            "ack": ack_value["text"],
+            "reason": None
+        }
+
+    except BleakError as error:
+        print(f"BLE error: {error}")
+        return {
+            "ack": "false",
+            "reason": "ble_error"
+        }
+
+    except TimeoutError as error:
+        print(f"BLE timeout: {error}")
+        return {
+            "ack": "false",
+            "reason": "timeout"
+        }
+
+    except Exception as error:
+        print(f"Unexpected BLE error: {error}")
+        return {
+            "ack": "false",
+            "reason": "unexpected_error"
+        }
 
 def run_ble_write(payload: str):
-     return asyncio.run(write_payload_to_tag_with_notify(payload))
+    return asyncio.run(write_payload_to_tag_with_notify(payload))
 
 # test wrapper
 def run_ble_write_test():
