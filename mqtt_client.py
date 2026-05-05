@@ -66,8 +66,11 @@ def on_message(client, userdata, message):
     if ble_result["reason"] is not None:
         ack_payload["reason"] = ble_result["reason"]
 
-    client.publish(MQTT_TOPIC_ACK, json.dumps(ack_payload))
+    result = client.publish(MQTT_TOPIC_ACK, json.dumps(ack_payload), qos=1)
+    result.wait_for_publish()
+
     print(f"Published ACK to {MQTT_TOPIC_ACK}: {ack_payload}")
+    print(f"MQTT publish result code: {result.rc}")
 
 
 def start_mqtt_client():
