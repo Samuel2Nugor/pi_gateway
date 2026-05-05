@@ -1,5 +1,5 @@
 import asyncio
-from bleak import BleakClient, BleakScanner, BleakError, BleakDeviceNotfoundError
+from bleak import BleakClient, BleakScanner, BleakError
 
 from config import BLE_TAG_ADDRESS, WRITE_CHAR_UUID, ACK_CHAR_UUID
 
@@ -154,15 +154,16 @@ async def write_payload_to_tag_with_notify(payload: str):
             "reason": None
         }
 
-    except BleakDeviceNotFoundError as error:
-        print(f"Tag not found: {error}")
-        return {
-            "ack": "false",
-            "reason": "tag_not_found"
-        }
-
     except BleakError as error:
-        print(f"BLE error: {error}")
+        error_text = str(error)
+        print(f"BLE error: {error_text}")
+
+        if "not found" in error_text.lower():
+            return {
+                "ack": "false",
+                "reason": "tag_not_found"
+            }
+
         return {
             "ack": "false",
             "reason": "ble_error"
