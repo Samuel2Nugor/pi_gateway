@@ -16,7 +16,6 @@ Working:
 - BLE connection to ESP32-H2 tag
 - BLE write to ESP32-H2 write characteristic
 - MQTT payload forwarded to BLE tag
-- E-paper display updates from received payload
 - Basic JSON payload validation
 
 ---
@@ -24,8 +23,6 @@ Working:
 ## Hardware
 
 - Raspberry Pi Zero 2W
-- ESP32-H2 development board
-- Epaper module
 
 ---
 
