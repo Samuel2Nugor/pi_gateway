@@ -1,5 +1,5 @@
 import asyncio
-from bleak import BleakClient, BleakScanner, BleakError
+from bleak import BleakClient, BleakScanner, BleakError, BleakDeviceNotfoundError
 
 from config import BLE_TAG_ADDRESS, WRITE_CHAR_UUID, ACK_CHAR_UUID
 
@@ -73,7 +73,7 @@ async def write_payload_to_tag_with_notify(payload: str):
                 print("Failed to connect to Tag")
                 return {
                     "ack": "false",
-                    "reason": "not_connected"
+                    "reason": "connection_failed"
                 }
 
             print("Connected to Tag")
@@ -89,16 +89,23 @@ async def write_payload_to_tag_with_notify(payload: str):
             except Exception as error:
                 print(f"Failed to enable ACK notification: {error}")
                 print("Falling back to ACK read after write")
+                notify_enabled = False
 
             print(f"Writing payload: {payload}")
 
-            await client.write_gatt_char(
-                WRITE_CHAR_UUID,
-                payload.encode("utf-8"),
-                response=True
-            )
-
-            print("Payload written to Tag")
+            try:
+                await client.write_gatt_char(
+                    WRITE_CHAR_UUID,
+                    payload.encode("utf-8"),
+                    response=True
+                )
+                print("Payload written to Tag")
+            except Exception as error:
+                print(f"BLE write failed: {error}")
+                return {
+                    "ack": "false",
+                    "reason": "write_failed"
+                }
 
             if notify_enabled:
                 print("Waiting for ACK notification...")
@@ -106,26 +113,52 @@ async def write_payload_to_tag_with_notify(payload: str):
                 try:
                     await asyncio.wait_for(ack_received.wait(), timeout=5.0)
                     print(f"ACK received: {ack_value['text']}")
+
                 except asyncio.TimeoutError:
                     print("ACK notification timeout")
                     print("Reading ACK instead...")
 
+                    try:
+                        ack_data = await client.read_gatt_char(ACK_CHAR_UUID)
+                        ack_value["text"] = ack_data.decode("utf-8")
+                        print(f"ACK from Tag: {ack_value['text']}")
+                    except Exception as error:
+                        print(f"ACK read failed after notify timeout: {error}")
+                        return {
+                            "ack": "false",
+                            "reason": "ack_timeout"
+                        }
+
+                try:
+                    await client.stop_notify(ACK_CHAR_UUID)
+                    print("ACK notification disabled")
+                except Exception as error:
+                    print(f"Failed to stop ACK notification: {error}")
+
+            else:
+                try:
                     ack_data = await client.read_gatt_char(ACK_CHAR_UUID)
                     ack_value["text"] = ack_data.decode("utf-8")
                     print(f"ACK from Tag: {ack_value['text']}")
-
-                await client.stop_notify(ACK_CHAR_UUID)
-                print("ACK notification disabled")
-            else:
-                ack_data = await client.read_gatt_char(ACK_CHAR_UUID)
-                ack_value["text"] = ack_data.decode("utf-8")
-                print(f"ACK from Tag: {ack_value['text']}")
+                except Exception as error:
+                    print(f"ACK read failed: {error}")
+                    return {
+                        "ack": "false",
+                        "reason": "ack_read_failed"
+                    }
 
         print("Disconnected from Tag")
 
         return {
             "ack": ack_value["text"],
             "reason": None
+        }
+
+    except BleakDeviceNotFoundError as error:
+        print(f"Tag not found: {error}")
+        return {
+            "ack": "false",
+            "reason": "tag_not_found"
         }
 
     except BleakError as error:
@@ -135,20 +168,13 @@ async def write_payload_to_tag_with_notify(payload: str):
             "reason": "ble_error"
         }
 
-    except TimeoutError as error:
-        print(f"BLE timeout: {error}")
-        return {
-            "ack": "false",
-            "reason": "timeout"
-        }
-
     except Exception as error:
         print(f"Unexpected BLE error: {error}")
         return {
             "ack": "false",
             "reason": "unexpected_error"
         }
-
+    
 def run_ble_write(payload: str):
     return asyncio.run(write_payload_to_tag_with_notify(payload))
 
