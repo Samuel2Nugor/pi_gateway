@@ -1,2 +1,5 @@
-bleak
-paho-mqtt
+#BLE client
+bleak==3.0.2
+
+#MQTT broker communication
+paho-mqtt==2.1.0
