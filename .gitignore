@@ -1,6 +1,7 @@
 .venv/
+.env
 __pycache__/
-*.pyc
+* .pyc
 logs/
 gateway.db
 queue.db
