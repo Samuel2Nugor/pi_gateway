@@ -8,7 +8,7 @@ from logger import get_logger
 
 log = get_logger("database")
 
-DB_PATH = Path("gateway.db")
+DB_PATH = Path("data/gateway.db")
 
 # Thread-local connections so each thread gets its own SQLite connection
 _local = threading.local()
