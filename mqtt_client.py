@@ -35,7 +35,8 @@ def send_to_ble_with_retries(payload: str, message_id:int, max_attempts: int = 3
         log.info("BLE write attempt %d/%d", attempt, max_attempts)
 
         result = run_ble_write(payload)
-        insert_retry(message_id, attempt, result["ack"], result.get("Reason"))
+        if result["ack"] != "true":
+             insert_retry(message_id, attempt, result["ack"], result.get("reason"))
         
         if result["ack"] == "true":
             return result
@@ -138,7 +139,7 @@ def on_message(client, userdata, message) -> None:
 
 # Entry point
 def start_mqtt_client() -> None:
-    init_db()
+    #init_db()
     queue_manager.set_result_callback(_on_ble_result)
     
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)

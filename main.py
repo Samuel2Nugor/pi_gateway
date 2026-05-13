@@ -2,6 +2,7 @@ import asyncio
 import signal
 import threading
 
+from database import init_db
 from logger import get_logger
 from mqtt_client import start_mqtt_client, queue_manager
 #from ble_client import run_ble_scan
@@ -16,6 +17,8 @@ def _run_mqtt(loop: asyncio.AbstractEventLoop) -> None:
     
 async def _main_async() -> None:
     loop = asyncio.get_running_loop()
+    
+    init_db()
     
     # Start queue_manager FIRST so it's ready before MQTT receives anything
     queue_task = asyncio.create_task(queue_manager.start())
@@ -39,7 +42,7 @@ async def _main_async() -> None:
         loop.add_signal_handler(sig, _signal_handler)
         
     # Run queue manager until shutdown is requested
-    queue_task = asyncio.create_task(queue_manager.start())
+    #queue_task = asyncio.create_task(queue_manager.start())
     
     await stop_event.wait()
     

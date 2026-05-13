@@ -1,6 +1,4 @@
 import asyncio
-import json
-import sqlite3
 import threading
 import time
 from dataclasses import dataclass, field
@@ -11,7 +9,6 @@ from logger import get_logger
 
 log = get_logger("queue_manager")
 
-QUEUE_DB_PATH = Path("queue.db")
 TAG_THROTTLE_SECONDS = 2.0   # minimum gap between writes to the same tag
 
 # Data model
@@ -19,66 +16,16 @@ TAG_THROTTLE_SECONDS = 2.0   # minimum gap between writes to the same tag
 class QueuedMessage:
     tag_id: str
     payload: str
+    message_id: Optional[int] = None 
     enqueued_at: float = field(default_factory=time.monotonic)
-    message_id: Optional[int] = None  # databse row_id, set after insert_message()
     
-
-# Persistence (SQLite-backed queue for restart survival)
-def _get_queue_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(QUEUE_DB_PATH, check_same_thread=False)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS pending_queue (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            tag_id      TEXT    NOT NULL,
-            payload     TEXT    NOT NULL,
-            message_id  INTEGER,
-            enqueued_at REAL    NOT NULL
-        )
-    """)
-    conn.commit()
-    return conn
-    
-def persist_message(msg: QueuedMessage) -> int:
-    """Save a message to the persistent queue. returns the queue row id."""
-    conn = _get_queue_conn()
-    cur = conn.execute(
-        "INSERT INTO pending_queue (tag_id, payload, message_id, enqueued_at) VALUES (?, ?, ?, ?)",
-        (msg.tag_id, msg.payload, msg.message_id, msg.enqueued_at),
-    )
-    conn.commit()
-    conn.close()
-    log.debug("Persisted queue entry id=%d tag_id=%s", cur.lastrowid, msg.tag_id)
-    return cur.lastrowid
-    
-    
-def load_persisted_messages() -> list[QueuedMessage]:
-    """Load any messages that survived a restart."""
-    conn = _get_queue_conn()
-    rows = conn.execute(
-        "SELECT tag_id, payload, message_id, enqueued_at FROM pending_queue ORDER by id"
-    ).fetchall()
-    conn.close()    
-    msgs = [QueuedMessage(tag_id=r[0], payload=r[1],
-                        message_id=r[2], enqueued_at=r[3]) for r in rows]
-    if msgs:
-        log.info("Loaded %d persisted message(s) from queue.db", len(msgs))
-    return msgs
-    
-    
-def clear_persisted_queue() -> None:
-    conn = _get_queue_conn()
-    conn.execute("DELETE FROM pending_queue")
-    conn.commit()
-    conn.close()
-    log.debug("Cleared persistent queue")
     
     
 # Queue manager
 class QueueManager:
     """Thread-safe BLE write queue with:
     - Async in-memory queue
-    - SQLite persistence across restarts
+    - Restart recovery via gateway.db
     - per-tag throttling
     """
     
@@ -90,71 +37,63 @@ class QueueManager:
         self._last_write: dict[str, float] = {}   #tag_id -> last write timestamp
         self._lock = threading.Lock()
         self._running = False
-        #self._on_result = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._on_result: Optional[Callable[[QueuedMessage, dict], None]] = None
-        #self._loop: asyncio.AbstractEventLoop | None = None
     
     def set_result_callback(self, fn: Callable[[QueuedMessage, dict], None]) -> None:
         """Optional callback invoked with (message, ble_result) after each write"""
         self._on_result = fn
         
-    def enqueue(self,msg: QueuedMessage) -> None:
-        """Add a message to the queue and persist it."""
-        persist_message(msg)
+    def enqueue(self, msg: QueuedMessage) -> None:
+        """Add a message to the in-memory queue. Thread-safe"""
         if self._loop is not None and self._loop.is_running():
-            # Called from MQTT thread - schedule into the event loop safely
             self._loop.call_soon_threadsafe(lambda: self._queue.put_nowait(msg))
         else:
             self._queue.put_nowait(msg)
         log.info("[QUEUE] Enqueue tag_id=%s", msg.tag_id)
-        #if self._loop is None:
-            #log.error( "[QUEUE] Cannot enqueue: event loop not ready")
-            #return
-            
-        #self._loop.call_soon_threadsafe(self._enqueue_inside_loop, msg)
-        
-    #def _enqueue_inside_loop(self, msg: QueuedMessage) -> None:
-        #"""Runs inside asyncio event loop thread."""
-        #persist_message(msg)
-        #self._queue.put_nowait(msg)
-        #log.info("[QUEUE] Enqueue tag_id=%s queue_size=%d", msg.tag_id, self._queue.qsize())
-        
+       
     async def start(self) -> None:
-        """Load persisted messages then start processing loop."""
-        #self._loop = asyncio.get_running_loop()
+        """Reload unfinished messages from gateway.db then start processing and loop."""
+        from database import load_unfinished_messages, update_message_status
+        
         self._running = True
-        
-        # Lear FIRST then load - prevents double-persist on stop()
-        persisted = load_persisted_messages()
-        clear_persisted_queue()
-        for msg in persisted:
-            self._queue.put_nowait(msg)
-            log.info("[QUEUE] Reloaded tag_id=%s from persistance", msg.tag_id)
-        #clear_persisted_queue()
-        
-        
-        # Store event loop reference so enqueue() can wake it from other threads
         self._loop = asyncio.get_running_loop()
+        
+        # Reload any messages that didnt dfinish before last shutdown
+        unfinished = load_unfinished_messages()
+        for row in unfinished:
+            # Reset to pending in case they were stuck as 'processing'
+            update_message_status(row["id"], "pending")
+            self._queue.put_nowait(QueuedMessage(
+                tag_id=row["tag_id"],
+                payload=row["payload"],
+                message_id=row["id"],
+            ))
+            log.info("[QUEUE] Reloaded message_id=%d tag_id=%s", row["id"], row["tag_id"])
+            
         log.info("[QUEUE] Queue manager started")
         await self._process_loop()
         
     async def stop(self) -> None:
-        """Graceful shutdown - persists any remaining messages."""
+        """Graceful shutdown - unfinished messages stay as 'pending' in gateway.db."""
+        from database import update_message_status
+        
         self._running = False
-        remaining = []
+        remaining = 0
         while not self._queue.empty():
             try:
-                remaining.append(self._queue.get_nowait())
+                msg = self._queue.get_nowait()
+                if msg.message_id is not None:
+                    update_message_status(msg.message_id, "pending")
+                remaining += 1
             except asyncio.QueueEmpty:
                 break
-                
-        for msg in remaining:
-            persist_message(msg)
-        log.info("[QUEUE] Stopped. Persisted %d remining message(s).", len(remaining))
+        log.info("[QUEUE] Stopped. %d message(s) left as pending in gateway.db.", remaining)
         
     
     async def _process_loop(self) -> None:
+        from database import update_message_status
+        
         while self._running:
             try:
                 msg = await asyncio.wait_for(self._queue.get(), timeout=1.0)
@@ -163,7 +102,11 @@ class QueueManager:
                 
             await self._throttle_tag(msg.tag_id)
             
-            log.info("[QUEUE] Processing tag_id=%s", msg.tag_id)
+            # Mark as processing
+            if msg.message_id is not None:
+                update_message_status(msg.message_id, "processing")
+            
+            log.info("[QUEUE] Processing tag_id=%s message_id=%s", msg.tag_id, msg.message_id)
             
             #Pass both payload and message_id to the write function
             result = await asyncio.get_event_loop().run_in_executor(
@@ -172,6 +115,11 @@ class QueueManager:
             
             log.info("[QUEUE] Result tag_id=%s ack=%s reason=%s",
                     msg.tag_id, result.get("ack"), result.get("reason"))
+                    
+            # Update final status in gateway.db
+            if msg.message_id is not None:
+                status = "sent" if result.get("ack") == "true" else "failed"
+                update_message_status(msg.message_id, status)
                     
             with self._lock:
                 self._last_write[msg.tag_id] = time.monotonic()
@@ -191,10 +139,3 @@ class QueueManager:
             if wait > 0:
                 log.debug("[QUEUE] Throttling tag_id=%s for %.1fs", tag_id, wait)
                 await asyncio.sleep(wait)
-            
-            
-            
-    
-    
-    
-    

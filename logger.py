@@ -23,6 +23,10 @@ def _setup_root_logger() -> None:
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
     
+    # Avoid duplicate handlers if this modules is imported more than onces
+    if root.handlers:
+        return
+    
     # Console handler   
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.DEBUG)
@@ -41,6 +45,12 @@ def _setup_root_logger() -> None:
         
     root.addHandler(console)
     root.addHandler(file_handler)
+    
+    # Quiet noisy external libraries
+    logging.getLogger("bleak").setLevel(logging.WARNING)
+    logging.getLogger("bleak.backends").setLevel(logging.WARNING)
+    logging.getLogger("bleak.backends.bluezbus").setLevel(logging.WARNING)
+    logging.getLogger("dbus_fast").setLevel(logging.WARNING)
         
     
 # Setup once on import
