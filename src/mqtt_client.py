@@ -11,7 +11,7 @@ from queue_manager import QueueManager, QueuedMessage
 log = get_logger("mqtt_client")
 
 # Constants
-REQUIRED_FIELDS = ["tagId", "title", "finalPrice"]
+REQUIRED_FIELDS = ["commandId", "tagId", "title", "finalPrice"]
 
 RETRY_REASONS = {
     "tag_not_found",
@@ -71,11 +71,12 @@ def _on_ble_result(msg: QueuedMessage, ble_result: dict) -> None:
         )
         
     ack_payload = {
+        "commandId": msg.command_id,
         "tagId": msg.tag_id,
         "ack": ble_result["ack"],
     }
     if ble_result.get("reason") is not None:
-        ack:payload["reason"] = ble_result["reason"]
+        ack_payload["reason"] = ble_result["reason"]
         
     if _mqtt_client_ref is None:
         log.error("MQTT client not available - cannot publish ACK")
@@ -122,6 +123,7 @@ def on_message(client, userdata, message) -> None:
             
     # Persist inbound message to database
     message_id = insert_message(
+        command_id=data["commandId"],
         topic=message.topic,
         tag_id=data["tagId"],
         title=data["title"],
@@ -131,6 +133,7 @@ def on_message(client, userdata, message) -> None:
     
     # Enqueue for BLE write
     queue_manager.enqueue(QueuedMessage(
+        command_id=data["commandId"],
         tag_id=data["tagId"],
         payload=payload,
         message_id=message_id,
@@ -143,6 +146,9 @@ def start_mqtt_client() -> None:
     queue_manager.set_result_callback(_on_ble_result)
     
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    
+    global _mqtt_client_ref
+    _mqtt_client_ref = client
 
     client.on_connect = on_connect
     client.on_message = on_message

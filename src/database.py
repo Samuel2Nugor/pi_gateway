@@ -28,6 +28,7 @@ def init_db() -> None:
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS messages (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            command_id  INTEGER,
             received_at TEXT    NOT NULL,
             topic       TEXT    NOT NULL,
             tag_id      TEXT    NOT NULL,
@@ -65,13 +66,13 @@ def _now() -> str:
 
 # Messages  
 
-def insert_message(topic: str, tag_id: str, title: str, final_price: str, raw_payload: str) -> int:
+def insert_message(command_id: int, topic: str, tag_id: str, title: str, final_price: str, raw_payload: str) -> int:
     """Insert an inbound message and return its row id."""
     conn = _get_conn()
     cur = conn.execute(
-        """INSERT INTO messages (received_at, topic, tag_id, title, final_price, raw_payload, status)
-            VALUES (?, ? , ?, ?, ?, ?, 'pending')""",
-        (_now(), topic, tag_id, title, final_price, raw_payload),
+        """INSERT INTO messages (command_id, received_at, topic, tag_id, title, final_price, raw_payload, status)
+            VALUES (?, ?, ? , ?, ?, ?, ?, 'pending')""",
+        (command_id, _now(), topic, tag_id, title, final_price, raw_payload),
     )
     
     conn.commit()
@@ -95,12 +96,12 @@ def load_unfinished_messages() -> list[dict]:
 	"""
 	conn = _get_conn()
 	rows = conn.execute(
-		"""SELECT id, tag_id, raw_payload FROM messages
+		"""SELECT id, command_id, tag_id, raw_payload FROM messages
 			WHERE status IN ('pending', 'processing')
 			ORDER BY id""",
 	).fetchall()
 	
-	msgs = [{"id": r["id"], "tag_id": r["tag_id"], "payload": r["raw_payload"]} for r in rows]
+	msgs = [{"id": r["id"], "command_id": r["command_id"], "tag_id": r["tag_id"], "payload": r["raw_payload"]} for r in rows]
 	if msgs:
 		log.info("Loaded %d unfinished messages(s) from gateway.db", len(msgs))
 	return msgs

@@ -14,6 +14,7 @@ TAG_THROTTLE_SECONDS = 2.0   # minimum gap between writes to the same tag
 # Data model
 @dataclass
 class QueuedMessage:
+    command_id: int
     tag_id: str
     payload: str
     message_id: Optional[int] = None 
@@ -50,7 +51,7 @@ class QueueManager:
             self._loop.call_soon_threadsafe(lambda: self._queue.put_nowait(msg))
         else:
             self._queue.put_nowait(msg)
-        log.info("[QUEUE] Enqueue tag_id=%s", msg.tag_id)
+        log.info("[QUEUE] Enqueue command_id=%s tag_id=%s", msg.command_id, msg.tag_id)
        
     async def start(self) -> None:
         """Reload unfinished messages from gateway.db then start processing and loop."""
@@ -65,6 +66,7 @@ class QueueManager:
             # Reset to pending in case they were stuck as 'processing'
             update_message_status(row["id"], "pending")
             self._queue.put_nowait(QueuedMessage(
+                command_id=row["command_id"],
                 tag_id=row["tag_id"],
                 payload=row["payload"],
                 message_id=row["id"],
@@ -106,7 +108,7 @@ class QueueManager:
             if msg.message_id is not None:
                 update_message_status(msg.message_id, "processing")
             
-            log.info("[QUEUE] Processing tag_id=%s message_id=%s", msg.tag_id, msg.message_id)
+            log.info("[QUEUE] Processing command_id=%s tag_id=%s message_id=%s", msg.command_id, msg.tag_id, msg.message_id)
             
             #Pass both payload and message_id to the write function
             result = await asyncio.get_event_loop().run_in_executor(
