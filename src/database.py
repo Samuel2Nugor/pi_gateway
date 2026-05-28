@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from logger import get_logger
+from src.logger import get_logger
 
 log = get_logger("database")
 
@@ -27,35 +27,18 @@ def init_db() -> None:
     conn = _get_conn()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS messages (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            command_id  INTEGER,
-            received_at TEXT    NOT NULL,
-            topic       TEXT    NOT NULL,
-            tag_id      TEXT    NOT NULL,
-            title       TEXT    NOT NULL,
-            final_price TEXT    NOT NULL,
-            raw_payload TEXT    NOT NULL,
-            status		TEXT	NOT Null DEFAULT 'pending'
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            command_id INTEGER,
+            received_at TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            final_price REAL NOT NULL,
+            raw_payload TEXT NOT NULL,
+            status TEXT	NOT NULL DEFAULT 'pending'
         );
-            
-        CREATE TABLE IF NOT EXISTS ble_results (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_id   INTEGER NOT NULL REFERENCES messages(id),
-            completed_at TEXT    NOT NULL,
-            ack          TEXT    NOT NULL,
-            reason       TEXT,
-            attempts 	 INTEGER NOT NULL
-        );
-        
-        CREATE TABLE IF NOT EXISTS retry_history (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            message_id  INTEGER NOT NULL REFERENCES messages(id),
-            attempt     INTEGER NOT NULL,
-            attempt_at  TEXT    NOT NULL,
-            ack         TEXT    NOT NULL,
-            reason      TEXT
-        );
-    """)
+        """
+    )
     
     conn.commit()
     log.info("Database initialised at %s", DB_PATH)
@@ -66,7 +49,8 @@ def _now() -> str:
 
 # Messages  
 
-def insert_message(command_id: int, topic: str, tag_id: str, title: str, final_price: str, raw_payload: str) -> int:
+def insert_message(command_id: int, topic: str, tag_id: int, title: str, final_price: float, raw_payload: str) -> int:
+                        
     """Insert an inbound message and return its row id."""
     conn = _get_conn()
     cur = conn.execute(
@@ -91,8 +75,8 @@ def update_message_status(message_id: int, status: str) -> None:
 	
 def load_unfinished_messages() -> list[dict]:
 	"""
-	Load all messages with status 'pending' or 'processing' on startup.
-	These need to be re-enqueued after a restart.
+	Load unfinished messages after gateway restart.
+    Pending or processing messages can be retried.
 	"""
 	conn = _get_conn()
 	rows = conn.execute(
@@ -107,31 +91,7 @@ def load_unfinished_messages() -> list[dict]:
 	return msgs
 	
 	
-# BLE results
 
-def insert_ble_result(message_id: int, ack: str, reason: Optional[str], attempts: int) -> None:
-    """Insert the final BLE outcome for a message."""
-    conn = _get_conn()
-    conn.execute(
-        """INSERT INTO ble_results (message_id, completed_at, ack, reason, attempts)
-            VALUES (?, ?, ?, ?, ?)""",
-        (message_id, _now(), ack, reason, attempts),
-    )
-    conn.commit()
-    log.debug("Inserted ble_result message_id=%d ack=%s reason=%s", message_id, ack, reason)
-    
-    
-def insert_retry(message_id: int, attempt: int, ack: str, reason: Optional[str]) -> None:
-    """Insert a single retry attempt record"""
-    conn = _get_conn()
-    conn.execute(
-        """INSERT INTO retry_history
-			(message_id, attempt, attempt_at, ack, reason)
-            VALUES (?, ?, ?, ?, ?)""",
-        (message_id, attempt, _now(), ack, reason),
-    )
-    conn.commit()
-    log.debug("Inserted retry message_id=%d attempt=%d reason=%s", message_id, attempt, reason)
     
             
             
